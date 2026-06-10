@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PRO
+  PREMIUM
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum TxType {
+  REFILL
+  SPEND
+  PURCHASE
+  REFUND
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  plan      Plan     @default(FREE)
+  credits   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  videoJobs          VideoJob[]
+  creditTransactions CreditTransaction[]
+}
+
+model VideoJob {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  status        JobStatus @default(QUEUED)
+  provider      String
+  model         String?
+  inputText     String
+  inputImageUrl String?
+  duration      Int
+  outputUrl     String?
+  thumbnailUrl  String?
+  creditsCost   Int
+  error         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transactions CreditTransaction[]
+}
+
+model CreditTransaction {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  amount     Int // + add, - spend
+  type       TxType
+  videoJobId String?
+  videoJob   VideoJob? @relation(fields: [videoJobId], references: [id])
+  stripeRef  String?
+  createdAt  DateTime  @default(now())
+}

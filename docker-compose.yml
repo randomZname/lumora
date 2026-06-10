@@ -1,0 +1,63 @@
+# docker-compose.yml — MVP_AI
+#
+# NOTE on Postgres: there is NO postgres service here on purpose.
+# An existing container `bogi_db` (Postgres 16 + pgvector, port 5432, user `bogi`)
+# is reused. We create a separate database `mvp_ai` on it (see docs/SETUP.md).
+#
+# How the app + these containers reach `bogi_db`:
+#   - From the Next.js app running on the HOST: DATABASE_URL points at
+#       postgresql://bogi:<pw>@localhost:5432/mvp_ai
+#   - From INSIDE a container (e.g. n8n) needing Postgres, use either:
+#       (a) host.docker.internal:5432  (works on Docker Desktop / Win + Mac), OR
+#       (b) attach to the network `bogi_db` already lives on
+#           (commonly `bogirepo-main_default`) and reach it by service name.
+#     To use option (b), uncomment the `networks:` blocks below and set the
+#     external network name to match your existing one
+#     (`docker network ls` to find it).
+
+services:
+  minio:
+    image: minio/minio
+    container_name: mvp_ai_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    # networks:
+    #   - bogi_shared
+
+  n8n:
+    image: n8nio/n8n
+    container_name: mvp_ai_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: ${N8N_PORT:-5678}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-changeme}
+      # Lets n8n reach the host-bound bogi_db / the Next.js callback URL.
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # networks:
+    #   - bogi_shared
+
+volumes:
+  minio_data:
+  n8n_data:
+# networks:
+#   bogi_shared:
+#     external: true
+#     name: bogirepo-main_default

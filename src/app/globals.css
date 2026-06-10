@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --bg-void: #08070d;
+  --bg-night: #0d0b16;
+  --iris: #8b5cf6;
+  --flare: #fb7185;
+  --gold: #fbbf24;
+  --mint: #34d399;
+  --ink: #ece9f5;
+  --mute: #9a93b5;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --glow: 0 0 30px rgba(139, 92, 246, 0.35), 0 0 60px rgba(251, 113, 133, 0.18);
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-void);
+  color: var(--ink);
+  font-family: var(--font-body), "Inter", system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Signature gradient text (violet -> rose -> gold). */
+.gradient-text {
+  background-image: linear-gradient(100deg, #a78bfa 0%, #fb7185 48%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Faint editorial grid. */
+.bg-grid {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 56px 56px, 56px 56px;
+  background-position: center;
+}
+
+/* Film grain overlay (SVG noise, no asset needed). */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Glass panel. */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--hairline);
+  box-shadow: 0 14px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+}
+
+/* Gradient hairline border that lights up on hover/focus. */
+.neon-border {
+  position: relative;
+}
+.neon-border::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(139, 92, 246, 0.55), rgba(251, 113, 133, 0.5), rgba(251, 191, 36, 0.45));
+  filter: blur(14px);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  z-index: -1;
+}
+.neon-border:hover::after,
+.neon-border:focus-within::after {
+  opacity: 0.9;
+}
+
+/* Static signature glow on text. */
+.glow-text {
+  text-shadow: 0 0 18px rgba(139, 92, 246, 0.45), 0 0 36px rgba(251, 113, 133, 0.25);
+}
+
+@keyframes pulse-blur {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(251, 113, 133, 0.6));
+  }
+}
+.glow-pulse {
+  animation: pulse-blur 3s ease-in-out infinite;
+}
+
+/* Slow drifting aurora blobs (used by the background). */
+@keyframes drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4%, -3%, 0) scale(1.12); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+.aura-blob {
+  animation: drift 18s ease-in-out infinite;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise {
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--iris);
+  outline-offset: 2px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.96); }
+  to { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-blob, .glow-pulse, .rise { animation: none; }
+}

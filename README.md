@@ -2,7 +2,11 @@
 
 Lumora is an AI **image + text → video** SaaS. Upload a still frame (or just describe a scene), set the mood and motion in one prompt, and an async pipeline renders a short cinematic clip in ~30 seconds.
 
-![Lumora sample output](public/samples/cyber-alley.jpg)
+![Lumora — landing page](docs/screenshots/home.png)
+
+| Creation studio | Plans |
+|---|---|
+| ![Studio](docs/screenshots/studio.png) | ![Plans](docs/screenshots/plans.png) |
 
 ## Features
 

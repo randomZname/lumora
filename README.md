@@ -2,6 +2,8 @@
 
 Lumora is an AI **image + text → video** SaaS. Upload a still frame (or just describe a scene), set the mood and motion in one prompt, and an async pipeline renders a short cinematic clip in ~30 seconds.
 
+**▶ Live demo: [lumora-delta-lyart.vercel.app](https://lumora-delta-lyart.vercel.app)**
+
 ![Lumora — landing page](docs/screenshots/home.png)
 
 | Creation studio | Plans |

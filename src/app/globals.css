@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Tailwind v4 does not auto-load tailwind.config.ts — without this line all
+   custom utilities (aura-* colors, shadow-glow, rounded-4xl, font-display) vanish. */
+@config "../../tailwind.config.ts";
 
 :root {
   color-scheme: dark;

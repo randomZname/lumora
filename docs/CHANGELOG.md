@@ -2,6 +2,13 @@
 
 Newest first. Format: `## YYYY-MM-DD` then `- what — why`.
 
+## 2026-06-11 (Tailwind config fix — primary buttons had no background)
+- Tailwind v4 doesn't auto-load `tailwind.config.ts`, so every custom utility (aura-*
+  colors, shadow-glow, rounded-4xl, font-display) silently produced nothing — primary
+  buttons rendered as bare text with no background/border (reported on Plans "Go Pro"
+  and the home hero). Fix: `@config "../../tailwind.config.ts";` in globals.css.
+  Restores the full gradient brand identity site-wide. README screenshots re-shot.
+
 ## 2026-06-11 (GitHub + Vercel launch, Kling showcase)
 - Published the project: GitHub repo `randomZname/lumora` (public) + Vercel production
   deploy at https://lumora-delta-lyart.vercel.app. Repo hygiene: `/media`, `/public/uploads`,

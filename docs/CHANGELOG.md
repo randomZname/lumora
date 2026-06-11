@@ -2,6 +2,21 @@
 
 Newest first. Format: `## YYYY-MM-DD` then `- what — why`.
 
+## 2026-06-11 (GitHub + Vercel launch, Kling showcase)
+- Published the project: GitHub repo `randomZname/lumora` (public) + Vercel production
+  deploy at https://lumora-delta-lyart.vercel.app. Repo hygiene: `/media`, `/public/uploads`,
+  `Prompts.txt` gitignored (runtime/user data); `.env.example` un-ignored; verified no real
+  secrets in any committed file. README rewritten (product pitch, stack, screenshots, live
+  demo link). Added `postinstall: prisma generate` for Vercel builds.
+- Regenerated all 6 showcase clips with **Kling 2.5 Turbo Pro t2v** (detailed cinematic
+  prompts, 16:9, 5s) — old samples were low quality. Compressed to 720p H.264 (~0.5–1.8MB
+  each) + fresh poster JPGs via ffmpeg-static. Same filenames → zero code changes. The
+  "made with the same pipeline" claim stays true. Removed unused `public/images/{city-rain,
+  portrait-neon}.jpg`. Re-shot README screenshots.
+- Known Vercel limits (tracked in ISSUES): no production DB yet (login/generation disabled,
+  DATABASE_URL is a placeholder), and stub/fal providers rely on post-response `setTimeout`
+  which serverless freezes — generation needs a webhook flow for prod.
+
 ## 2026-06-08 (model picker: no image requirement)
 - Dropped the "Kling needs an image" rule. Now ANY model choice works with or without an image:
   image present → image-to-video, absent → text-to-video. Confirmed Kling has a t2v endpoint

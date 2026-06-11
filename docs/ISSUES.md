@@ -10,13 +10,23 @@ Known bugs / tech debt. `[ ]` open, `[x]` fixed (note date). Severity: 🔴 high
       transaction — if spend throws, job is DONE but uncharged (double-charge guard
       prevents re-charge). Acceptable for MVP; tighten later.
 - [ ] 🟢 `caniuse-lite` outdated (build warning). Fix: `npx update-browserslist-db@latest`.
+- [ ] 🟡 Remaining npm audit findings (next, next-auth, bundled postcss/preact) are only
+      fixed in Next 16 / NextAuth v5 — both breaking upgrades. Next pinned at ^14.2.35
+      (latest 14.x security patch, fixes the 2025-12-11 advisory). Plan major upgrades
+      in Phase 5.
 - [x] 2026-06-08 Generated videos played slowly from fal.media (remote, no faststart) — now
       transcoded to faststart + self-hosted via `/api/media` with Range support → instant playback.
 - [ ] 🟢 No rate limiting on any route. Phase 5.
 - [ ] 🟢 No tests, no real CI checks.
-- [ ] 🟢 `src/TestComponent.tsx` looks like leftover scaffolding — remove if unused.
+- [ ] 🟡 Vercel prod has no database — DATABASE_URL is a placeholder, so login and
+      generation are disabled on the live demo. Fix: provision Neon (or Vercel Postgres)
+      + run migrations + set ENABLE_DEV_LOGIN/OAuth.
+- [ ] 🟡 Stub/Fal providers do post-response work via `setTimeout` — Vercel serverless
+      freezes after the response, so the callback/poll never fires in prod. Fix: fal
+      webhooks (queue API supports `fal_webhook` param) pointing at /api/video/callback.
 
 ## Fixed
+- [x] 2026-06-11 🟢 `src/TestComponent.tsx` leftover scaffolding — confirmed unused, removed.
 - [x] 2026-06-08 🔴 `api/video/create` had no auth — now requires `getServerSession` (Agent D).
 - [x] 2026-06-08 🔴 Credits never enforced — `lib/credits.ts` + create(check)/callback(spend)
       wired; spent only on success (Agents C/D).

@@ -55,3 +55,4 @@ next-env.d.ts
 Prompts.txt
 
 .vercel
+.env*

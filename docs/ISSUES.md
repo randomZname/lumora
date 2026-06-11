@@ -18,9 +18,9 @@ Known bugs / tech debt. `[ ]` open, `[x]` fixed (note date). Severity: 🔴 high
       transcoded to faststart + self-hosted via `/api/media` with Range support → instant playback.
 - [ ] 🟢 No rate limiting on any route. Phase 5.
 - [ ] 🟢 No tests, no real CI checks.
-- [ ] 🟡 Vercel prod has no database — DATABASE_URL is a placeholder, so login and
-      generation are disabled on the live demo. Fix: provision Neon (or Vercel Postgres)
-      + run migrations + set ENABLE_DEV_LOGIN/OAuth.
+- [x] 2026-06-12 🟡 Vercel prod had no database — provisioned Neon via Vercel Marketplace
+      (`neon-coral-zebra`), ran `prisma migrate deploy`, enabled dev login. Live login
+      verified end-to-end (csrf → credentials callback → session with FREE plan).
 - [ ] 🟡 Stub/Fal providers do post-response work via `setTimeout` — Vercel serverless
       freezes after the response, so the callback/poll never fires in prod. Fix: fal
       webhooks (queue API supports `fal_webhook` param) pointing at /api/video/callback.

@@ -2,6 +2,17 @@
 
 Newest first. Format: `## YYYY-MM-DD` then `- what — why`.
 
+## 2026-06-12 (production database + working login on the live demo)
+- Provisioned Neon Postgres through the Vercel Marketplace integration and connected it
+  to the `lumora` project; ran both Prisma migrations against it. Enabled Dev Login on
+  prod (any email, no password — demo-friendly). Verified the full flow live: sign-in
+  creates a user in Neon with 20 starter credits / FREE plan.
+- Gotchas hit: `vercel env add` via piped stdin stored EMPTY values (use `--value` flag);
+  `vercel env pull` shows sensitive prod vars as empty by design (don't trust it for
+  verification — test at runtime); `vercel integration add neon` OVERWRITES `.env.local`
+  with pulled envs — our local file was lost and rebuilt (FAL_KEY must be re-pasted from
+  the fal.ai dashboard; local DB password recovered from the bogi_db container).
+
 ## 2026-06-11 (Tailwind config fix — primary buttons had no background)
 - Tailwind v4 doesn't auto-load `tailwind.config.ts`, so every custom utility (aura-*
   colors, shadow-glow, rounded-4xl, font-display) silently produced nothing — primary

@@ -23,8 +23,9 @@ Known bugs / tech debt. `[ ]` open, `[x]` fixed (note date). Severity: 🔴 high
 - [ ] 🟡 Payments run on the internal mock provider (test card 4242…). Real money needs
       Stripe keys + StripeProvider + webhook signature verification (interface ready,
       fulfillment idempotent).
-- [ ] 🔴 FAL_KEY lost locally AND missing on Vercel; N8N_CALLBACK_SECRET also missing on
-      Vercel → real fal generation blocked everywhere until re-issued (see TASKS).
+- [x] 2026-07-04 🔴 FAL_KEY lost locally AND missing on Vercel — user re-issued the key;
+      set in `.env.local` + Vercel prod, VIDEO_PROVIDER=fal everywhere. Verified live:
+      real LTX render on prod, delivered via fal webhook (~3 min), credit charged.
 - [x] 2026-06-12 🟡 Vercel prod had no database — provisioned Neon via Vercel Marketplace
       (`neon-coral-zebra`), ran `prisma migrate deploy`, enabled dev login. Live login
       verified end-to-end (csrf → credentials callback → session with FREE plan).

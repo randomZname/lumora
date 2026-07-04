@@ -5,9 +5,8 @@
 > Current phase: **Phases 0–4 DONE (auth, credits, real video, payments-mock). Next: Stripe live + R2.**
 
 ## IN-PROGRESS / NEXT
-- [ ] **FAL_KEY is lost** (locally AND on Vercel) — re-issue at https://fal.ai/dashboard/keys,
-      paste into `.env.local` + `vercel env add FAL_KEY production --value <key>`, set
-      VIDEO_PROVIDER=fal. Until then video renders use the stub sample clip.
+- [x] 2026-07-04 FAL_KEY re-issued and set locally + on Vercel; VIDEO_PROVIDER=fal.
+      Live prod render verified end-to-end via the fal webhook (LTX t2v, ~3 min).
 - [ ] Stripe live: set PAYMENT_PROVIDER=stripe + keys, implement StripeProvider
       (createCheckout → Stripe Checkout Session with paymentId in metadata) + webhook
       signature verification in `/api/payments/webhook`. Fulfillment already idempotent.

@@ -2,16 +2,32 @@
 
 > Active backlog. Claude: check this every session. Move tasks between sections and
 > log changes in `CHANGELOG.md`. `[ ]` todo, `[~]` in-progress, `[x]` done.
-> Current phase: **Phase 0–2 DONE & running. Next: Phase 3 (real video).**
+> Current phase: **Phases 0–4 DONE (auth, credits, real video, payments-mock). Next: Stripe live + R2.**
 
 ## IN-PROGRESS / NEXT
+- [ ] **FAL_KEY is lost** (locally AND on Vercel) — re-issue at https://fal.ai/dashboard/keys,
+      paste into `.env.local` + `vercel env add FAL_KEY production --value <key>`, set
+      VIDEO_PROVIDER=fal. Until then video renders use the stub sample clip.
+- [ ] Stripe live: set PAYMENT_PROVIDER=stripe + keys, implement StripeProvider
+      (createCheckout → Stripe Checkout Session with paymentId in metadata) + webhook
+      signature verification in `/api/payments/webhook`. Fulfillment already idempotent.
+- [ ] Swap LocalDisk → Cloudflare R2 for production permanence (storage interface ready;
+      on Vercel transcode/self-host is skipped until then).
+- [ ] Monthly credit refill job for subscription plans (credits granted once at purchase for now).
+- [ ] Upstash/Redis rate limiter (current one is per-instance in-memory — fine for MVP).
+- [ ] Add real GOOGLE_CLIENT_ID/SECRET when ready (Google button appears automatically).
+- [ ] Consider moving transcode off the callback path (job queue) so DONE isn't delayed by it.
+
+## DONE — Phase 4 (2026-07-04: payments + auth + prod video + security + redesign)
+- [x] Email+password auth (register API + credentials provider + tabs UI); dev login prod-off.
+- [x] Payment model + mock provider + idempotent fulfillment + checkout page + plans wiring.
+- [x] Account: billing history + latest clips gallery + purchase-success banner.
+- [x] fal webhook route (HMAC-signed) — video generation now works on Vercel serverless.
+- [x] Rate limiting + security headers/CSP + zod validation + timing-safe secrets.
+- [x] Aurora redesign v2: cinema hero + prompt caption; studio console + screening room.
+- [x] Full local e2e pass (see CHANGELOG 2026-07-04).
 - [x] 2026-06-08 Self-host fal output (faststart transcode + poster) via `lib/media.ts` +
       `/api/media` Range route → instant playback. (R2 swap later = same storage interface.)
-- [ ] Swap LocalDisk → Cloudflare R2 for production permanence (storage interface ready).
-- [ ] Consider moving transcode off the callback path (job queue) so DONE isn't delayed by it.
-- [ ] Switch to premium model (Kling 2.5 Turbo Pro) via FAL_MODEL when ready.
-- [ ] Production: real webhook (replace dev in-process polling) once deployed (fal can't reach localhost).
-- [ ] Add real GOOGLE_CLIENT_ID/SECRET to `.env.local` when ready (then disable ENABLE_DEV_LOGIN).
 
 ## DONE — Phase 3 (real video, core)
 - [x] 2026-06-08 `FalProvider` (fal queue submit + in-process poll + data-URI image).

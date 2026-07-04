@@ -1,7 +1,10 @@
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { rateLimit } from '@/lib/rate-limit';
+import { STARTER_CREDITS } from '@/lib/credits';
 
 const providers: NextAuthOptions['providers'] = [];
 
@@ -15,8 +18,37 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-// Dev login — local testing without Google. Gated by env; never enable in prod.
-if (process.env.ENABLE_DEV_LOGIN === 'true') {
+// Email + password — primary sign-in method. Users register via /api/auth/register.
+providers.push(
+  CredentialsProvider({
+    id: 'credentials',
+    name: 'Email & Password',
+    credentials: {
+      email: { label: 'Email', type: 'email' },
+      password: { label: 'Password', type: 'password' },
+    },
+    async authorize(credentials) {
+      const email = credentials?.email?.trim().toLowerCase();
+      const password = credentials?.password;
+      if (!email || !password) return null;
+
+      // Throttle guessing per account. NextAuth surfaces thrown messages as ?error=.
+      const rl = rateLimit(`login:${email}`, 10, 15 * 60_000);
+      if (!rl.ok) throw new Error('Too many sign-in attempts. Try again in a few minutes.');
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user?.passwordHash) return null;
+
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) return null;
+
+      return { id: user.id, email: user.email, name: user.name, image: user.image };
+    },
+  }),
+);
+
+// Dev login — local testing only. Hard-disabled in production builds.
+if (process.env.ENABLE_DEV_LOGIN === 'true' && process.env.NODE_ENV !== 'production') {
   providers.push(
     CredentialsProvider({
       id: 'dev',
@@ -44,22 +76,25 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
 
   callbacks: {
-    async signIn({ user }) {
-      // user съдържа name/email/image от Google
+    async signIn({ user, account }) {
       if (!user?.email) return false;
 
+      // Credentials users already exist in the DB (created by /api/auth/register).
+      if (account?.provider === 'credentials') return true;
+
+      // OAuth / dev sign-ins: sync profile, create on first login.
       await prisma.user.upsert({
         where: { email: user.email },
         update: {
-          name: user.name ?? null,
-          image: user.image ?? null,
+          ...(user.name ? { name: user.name } : {}),
+          ...(user.image ? { image: user.image } : {}),
         },
         create: {
           email: user.email,
           name: user.name ?? null,
           image: user.image ?? null,
           // Starter credits so new users can create right away (FREE allowance).
-          credits: 20,
+          credits: STARTER_CREDITS,
         },
       });
 

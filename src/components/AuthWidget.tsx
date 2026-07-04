@@ -27,22 +27,27 @@ export default function AuthWidget() {
 
   return (
     <div className="flex items-center gap-3">
-      {user.image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={user.image}
-          alt="User avatar"
-          className="h-8 w-8 rounded-full border border-white/10 object-cover"
-        />
-      ) : (
-        <div className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-gradient-to-br from-aura-iris/40 to-aura-flare/40 text-xs font-semibold text-aura-ink">
-          {displayName.charAt(0).toUpperCase()}
-        </div>
-      )}
-
-      <div className="hidden max-w-[160px] truncate text-sm text-aura-mute sm:block">
-        {displayName}
-      </div>
+      <Link
+        href="/account"
+        className="flex items-center gap-3 rounded-full transition hover:opacity-80"
+        aria-label="Account"
+      >
+        {user.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.image}
+            alt="User avatar"
+            className="h-8 w-8 rounded-full border border-white/10 object-cover"
+          />
+        ) : (
+          <div className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-gradient-to-br from-aura-iris/40 to-aura-flare/40 text-xs font-semibold text-aura-ink">
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <span className="hidden max-w-[160px] truncate text-sm text-aura-mute sm:block">
+          {displayName}
+        </span>
+      </Link>
 
       <button
         onClick={() => signOut({ callbackUrl: '/' })}

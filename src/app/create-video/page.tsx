@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import Button from '@/components/Button';
-import Card from '@/components/Card';
-import DemoVideoPanel from '@/components/DemoVideoPanel';
 
 type ModelChoice = 'auto' | 'ltx' | 'kling';
 
@@ -48,11 +47,17 @@ type Phase =
   | { kind: 'processing'; status: JobStatus }
   | { kind: 'done'; job: JobResponse }
   | { kind: 'failed'; message: string }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string; outOfCredits?: boolean };
 
-const POLL_INTERVAL_MS = 3000;
-// Render (fal) + transcode can take a few minutes — poll up to ~6 min.
+// Adaptive polling: quick checks early (stub finishes in seconds), then relax.
+const POLL_FAST_MS = 2500;
+const POLL_SLOW_MS = 5000;
+const POLL_FAST_COUNT = 10;
+// Render (fal) + transcode can take a few minutes — poll up to ~9 min.
 const MAX_POLLS = 120;
+
+const inputClass =
+  'w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-aura-ink outline-none transition focus:border-aura-iris focus:ring-1 focus:ring-aura-iris/60 disabled:opacity-60';
 
 export default function CreateVideoPage() {
   const [form, setForm] = useState<FormState>({
@@ -65,6 +70,7 @@ export default function CreateVideoPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [elapsed, setElapsed] = useState(0);
 
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,6 +78,14 @@ export default function CreateVideoPage() {
 
   // Image is optional — only the text prompt is required.
   const isValid = useMemo(() => form.text.trim().length > 5, [form.text]);
+
+  // Elapsed render timer — honest feedback while the pipeline works.
+  useEffect(() => {
+    if (!isBusy) return;
+    setElapsed(0);
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isBusy]);
 
   // Clean up object URL + any pending poll timer on unmount.
   useEffect(() => {
@@ -99,6 +113,11 @@ export default function CreateVideoPage() {
     }
   };
 
+  const schedulePoll = (jobId: string, attempt: number) => {
+    const delay = attempt <= POLL_FAST_COUNT ? POLL_FAST_MS : POLL_SLOW_MS;
+    pollTimer.current = setTimeout(() => void pollJob(jobId, attempt), delay);
+  };
+
   const pollJob = async (jobId: string, attempt: number) => {
     if (attempt > MAX_POLLS) {
       setPhase({
@@ -113,28 +132,15 @@ export default function CreateVideoPage() {
       const res = await fetch(`/api/video/${jobId}`);
 
       if (res.status === 401) {
-        setPhase({
-          kind: 'error',
-          message: 'Your session expired. Please sign in again.',
-        });
+        setPhase({ kind: 'error', message: 'Your session expired. Please sign in again.' });
         return;
       }
       if (res.status === 404) {
-        setPhase({
-          kind: 'error',
-          message: 'We could not find this render job.',
-        });
+        setPhase({ kind: 'error', message: 'We could not find this render job.' });
         return;
       }
       if (!res.ok) {
-        setPhase({
-          kind: 'error',
-          message: 'Could not check render status. Retrying…',
-        });
-        pollTimer.current = setTimeout(
-          () => void pollJob(jobId, attempt + 1),
-          POLL_INTERVAL_MS,
-        );
+        schedulePoll(jobId, attempt + 1);
         return;
       }
 
@@ -154,17 +160,11 @@ export default function CreateVideoPage() {
 
       // QUEUED or PROCESSING -> keep polling
       setPhase({ kind: 'processing', status: job.status });
-      pollTimer.current = setTimeout(
-        () => void pollJob(jobId, attempt + 1),
-        POLL_INTERVAL_MS,
-      );
+      schedulePoll(jobId, attempt + 1);
     } catch (err) {
       console.error(err);
       // Transient network error — retry within the poll budget.
-      pollTimer.current = setTimeout(
-        () => void pollJob(jobId, attempt + 1),
-        POLL_INTERVAL_MS,
-      );
+      schedulePoll(jobId, attempt + 1);
     }
   };
 
@@ -172,7 +172,7 @@ export default function CreateVideoPage() {
     e.preventDefault();
 
     const newErrors: Record<string, string> = {};
-    if (!form.text.trim()) newErrors.text = 'Please describe the scene.';
+    if (!form.text.trim()) newErrors.text = 'Describe the scene first.';
     if (form.duration !== '5' && form.duration !== '10') {
       newErrors.duration = 'Choose a valid duration.';
     }
@@ -193,21 +193,18 @@ export default function CreateVideoPage() {
       const res = await fetch('/api/video/create', { method: 'POST', body });
 
       if (res.status === 401) {
-        setPhase({
-          kind: 'error',
-          message: 'Please sign in to create a video.',
-        });
+        setPhase({ kind: 'error', message: 'Please sign in to create a video.' });
         return;
       }
       if (res.status === 402) {
         setPhase({
           kind: 'error',
-          message:
-            'You are out of credits. Top up your balance to keep generating.',
+          message: 'You are out of credits.',
+          outOfCredits: true,
         });
         return;
       }
-      if (res.status === 400) {
+      if (res.status === 400 || res.status === 429 || res.status === 502) {
         let message = 'Please check your inputs and try again.';
         try {
           const data = (await res.json()) as { message?: string };
@@ -237,7 +234,7 @@ export default function CreateVideoPage() {
 
       // Kick off polling.
       setPhase({ kind: 'processing', status: 'QUEUED' });
-      void pollJob(data.jobId, 1);
+      schedulePoll(data.jobId, 1);
     } catch (err) {
       console.error(err);
       setPhase({ kind: 'error', message: 'Network error. Try again.' });
@@ -258,73 +255,62 @@ export default function CreateVideoPage() {
   return (
     <div className="space-y-10">
       <div className="space-y-3">
-        <p className="text-sm uppercase tracking-[0.25em] text-aura-iris">
-          The studio
-        </p>
+        <p className="text-sm uppercase tracking-[0.25em] text-aura-iris">The studio</p>
         <h1 className="font-display text-4xl font-semibold text-aura-ink sm:text-5xl">
           Describe it. <span className="gradient-text">Watch it move.</span>
         </h1>
         <p className="max-w-2xl text-aura-mute">
-          Write a prompt and hit generate — an image is optional. Add a reference
-          frame for image-to-video, or go text-only. Your clip renders in seconds.
+          Write a prompt and hit generate — an image is optional. Add a reference frame for
+          image-to-video, or go text-only.
         </p>
       </div>
 
-      {/* ✅ ТУК Е DEMO ПАНЕЛЪТ (точното място) */}
-      <DemoVideoPanel />
-
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card
-          title="Generation request"
-          description="Your request is validated and queued for the AI render pipeline."
-          accent="purple"
-          className="p-0"
-        >
-          <form className="space-y-6 p-6" onSubmit={handleSubmit}>
+      <div className="grid items-start gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        {/* PROMPT CONSOLE */}
+        <div className="glass rounded-4xl p-7">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">
-                Scene description
+              <label htmlFor="prompt" className="text-sm font-semibold text-aura-ink">
+                Prompt
               </label>
               <textarea
+                id="prompt"
                 name="text"
                 required
                 disabled={isBusy}
                 aria-invalid={Boolean(errors.text)}
                 value={form.text}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, text: e.target.value }))
-                }
-                placeholder="Ex: A neon-lit alley with rain reflecting on the ground, camera dolly forward, synthwave mood."
-                className="min-h-[140px] w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/60 disabled:opacity-60"
+                onChange={(e) => setForm((prev) => ({ ...prev, text: e.target.value }))}
+                placeholder="A neon-lit alley with rain reflecting on the ground, camera dolly forward, synthwave mood."
+                className={`min-h-[150px] resize-y ${inputClass}`}
               />
-              {errors.text && (
-                <p className="text-xs text-red-400">{errors.text}</p>
-              )}
+              <div className="flex items-center justify-between text-xs">
+                {errors.text ? (
+                  <p className="text-red-400">{errors.text}</p>
+                ) : (
+                  <p className="text-aura-mute/70">
+                    Mention subject, motion, and mood — camera moves work great.
+                  </p>
+                )}
+                <span className="tabular-nums text-aura-mute/60">{form.text.length}</span>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">
-                Reference image{' '}
-                <span className="font-normal text-slate-400">(optional)</span>
-              </label>
-
               <label
                 htmlFor="image"
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-white/15 bg-black/40 px-4 py-3 text-sm text-slate-200 transition hover:border-neon-blue/60"
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-white/15 bg-black/40 px-4 py-3 text-sm transition hover:border-aura-iris/60"
               >
-                <div className="space-y-1">
-                  <p className="font-semibold">
-                    {form.imageFile ? form.imageFile.name : 'Upload image (optional)'}
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-aura-ink">
+                    {form.imageFile ? form.imageFile.name : 'Reference frame (optional)'}
                   </p>
-                  <p className="text-xs text-slate-400">
-                    Skip it for text-to-video. JPEG, PNG, or WEBP. Under 5MB.
+                  <p className="text-xs text-aura-mute">
+                    Skip it for text-to-video. JPEG, PNG, or WEBP under 5MB.
                   </p>
                 </div>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs">
-                  Browse
-                </span>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-aura-ink">Browse</span>
               </label>
-
               <input
                 id="image"
                 name="image"
@@ -334,340 +320,212 @@ export default function CreateVideoPage() {
                 disabled={isBusy}
                 onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
               />
-
               {imagePreview && (
-                <div className="mt-2 overflow-hidden rounded-xl border border-white/10">
+                <div className="relative mt-2 overflow-hidden rounded-xl border border-white/10">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={imagePreview}
-                    alt="Reference preview"
-                    className="max-h-56 w-full object-cover"
-                  />
+                  <img src={imagePreview} alt="Reference preview" className="max-h-56 w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => handleFileChange(null)}
+                    disabled={isBusy}
+                    className="absolute right-2 top-2 rounded-full bg-aura-void/80 px-2.5 py-1 text-xs text-aura-ink backdrop-blur transition hover:bg-aura-void"
+                  >
+                    Remove
+                  </button>
                 </div>
               )}
-
-              {errors.image && (
-                <p className="text-xs text-red-400">{errors.image}</p>
-              )}
             </div>
 
-            <div className="space-y-2">
-              <span className="text-sm font-semibold text-slate-100">
-                Duration
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                {(['5', '10'] as const).map((value) => (
-                  <label
-                    key={value}
-                    className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
-                      form.duration === value
-                        ? 'border-neon-blue/70 bg-neon-blue/10'
-                        : 'border-white/10 bg-black/40 hover:border-neon-blue/40'
-                    } ${isBusy ? 'pointer-events-none opacity-60' : ''}`}
-                  >
-                    <span>{value} seconds</span>
-                    <input
-                      type="radio"
-                      name="duration"
-                      value={value}
-                      disabled={isBusy}
-                      checked={form.duration === value}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          duration: e.target.value as '5' | '10',
-                        }))
-                      }
-                      className="h-4 w-4 accent-neon-blue"
-                    />
-                  </label>
-                ))}
-              </div>
-              {errors.duration && (
-                <p className="text-xs text-red-400">{errors.duration}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <span className="text-sm font-semibold text-slate-100">Model</span>
-              <div className="grid grid-cols-3 gap-3">
-                {MODEL_OPTIONS.map((opt) => {
-                  const active = form.model === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() =>
-                        setForm((prev) => ({ ...prev, model: opt.value }))
-                      }
-                      className={`flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                        active
-                          ? 'border-aura-iris/70 bg-aura-iris/10'
-                          : 'border-white/10 bg-black/40 hover:border-aura-iris/40'
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <span className="text-sm font-semibold text-aura-ink">Duration</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['5', '10'] as const).map((value) => (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer items-center justify-center rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                        form.duration === value
+                          ? 'border-aura-iris/70 bg-aura-iris/10 text-aura-ink'
+                          : 'border-white/10 bg-black/40 text-aura-mute hover:border-aura-iris/40'
                       } ${isBusy ? 'pointer-events-none opacity-60' : ''}`}
                     >
-                      <span className="text-sm font-semibold text-aura-ink">
-                        {opt.label}
-                      </span>
-                      <span className="text-[11px] leading-tight text-aura-mute">
-                        {opt.hint}
-                      </span>
-                    </button>
-                  );
-                })}
+                      {value}s
+                      <input
+                        type="radio"
+                        name="duration"
+                        value={value}
+                        disabled={isBusy}
+                        checked={form.duration === value}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, duration: e.target.value as '5' | '10' }))
+                        }
+                        className="sr-only"
+                      />
+                    </label>
+                  ))}
+                </div>
               </div>
-              {errors.model && (
-                <p className="text-xs text-red-400">{errors.model}</p>
-              )}
+
+              <div className="space-y-2">
+                <span className="text-sm font-semibold text-aura-ink">Model</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {MODEL_OPTIONS.map((opt) => {
+                    const active = form.model === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        disabled={isBusy}
+                        title={opt.hint}
+                        onClick={() => setForm((prev) => ({ ...prev, model: opt.value }))}
+                        className={`rounded-xl border px-2 py-2.5 text-center text-xs font-semibold transition ${
+                          active
+                            ? 'border-aura-iris/70 bg-aura-iris/10 text-aura-ink'
+                            : 'border-white/10 bg-black/40 text-aura-mute hover:border-aura-iris/40'
+                        } ${isBusy ? 'pointer-events-none opacity-60' : ''}`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {/* Processing / progress state */}
-            {phase.kind === 'submitting' && (
-              <StatusBanner tone="info">
-                Uploading your request…
-              </StatusBanner>
-            )}
-            {phase.kind === 'processing' && (
-              <div className="rounded-xl border border-neon-blue/40 bg-neon-blue/10 px-4 py-3 text-sm text-neon-blue">
-                <div className="flex items-center gap-3">
-                  <Spinner />
-                  <span>
-                    {phase.status === 'QUEUED'
-                      ? 'Queued — your render is lined up…'
-                      : 'Rendering your video… this can take a moment.'}
-                  </span>
-                </div>
-                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full w-1/3 animate-pulse rounded-full bg-neon-blue" />
-                </div>
+            {(phase.kind === 'failed' || phase.kind === 'error') && (
+              <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {phase.message}{' '}
+                {phase.kind === 'error' && phase.outOfCredits && (
+                  <Link href="/plans" className="font-semibold underline underline-offset-4">
+                    Top up credits →
+                  </Link>
+                )}
               </div>
             )}
-            {phase.kind === 'failed' && (
-              <StatusBanner tone="error">{phase.message}</StatusBanner>
-            )}
-            {phase.kind === 'error' && (
-              <StatusBanner tone="error">{phase.message}</StatusBanner>
-            )}
-            {phase.kind === 'done' && (
-              <StatusBanner tone="success">
-                Your video is ready — see the preview on the right.
-              </StatusBanner>
-            )}
 
-            <div className="flex flex-col items-center justify-center gap-3 pt-4">
-              {phase.kind === 'done' ||
-              phase.kind === 'failed' ||
-              phase.kind === 'error' ? (
-                <Button
-                  type="button"
-                  variant="neon"
-                  className="text-base"
-                  onClick={resetForAnother}
-                >
+            <div className="pt-1">
+              {phase.kind === 'done' || phase.kind === 'failed' || phase.kind === 'error' ? (
+                <Button type="button" variant="primary" className="w-full justify-center text-base" onClick={resetForAnother}>
                   Create another
                 </Button>
               ) : (
                 <Button
                   type="submit"
                   disabled={isBusy || !isValid}
-                  variant="neon"
-                  className="text-base"
+                  variant="primary"
+                  className="w-full justify-center text-base"
                 >
                   {phase.kind === 'submitting'
-                    ? 'Creating…'
+                    ? 'Sending…'
                     : phase.kind === 'processing'
                       ? 'Rendering…'
-                      : 'Create video'}
+                      : 'Generate clip · 1 credit'}
                 </Button>
               )}
             </div>
           </form>
-        </Card>
+        </div>
 
-        <div className="space-y-4">
-          <Card
-            title="Live checklist"
-            description="Validation kicks in before the request is sent."
-            accent="green"
-          >
-            <ul className="space-y-2 text-sm text-slate-300">
-              <ChecklistItem
-                label="Description length"
-                ok={form.text.trim().length > 5}
-              />
-              <ChecklistItem
-                label="Image (optional)"
-                ok={Boolean(form.imageFile)}
-              />
-              <ChecklistItem
-                label="Duration chosen"
-                ok={Boolean(form.duration)}
-              />
-            </ul>
-          </Card>
+        {/* SCREENING ROOM */}
+        <div className="glass sticky top-24 rounded-4xl p-7">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-aura-ink">Screening room</h2>
+            {isBusy && (
+              <span className="tabular-nums rounded-full border border-aura-iris/40 bg-aura-iris/10 px-3 py-1 text-xs font-medium text-aura-iris">
+                {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
+              </span>
+            )}
+          </div>
 
           {phase.kind === 'done' ? (
-            <Card
-              title="Your video"
-              description={`Generated with ${modelLabel(phase.job.model)}.`}
-              accent="blue"
-            >
-              <div className="space-y-3">
-                <div className="overflow-hidden rounded-xl border border-white/10">
-                  <video
-                    key={phase.job.outputUrl ?? phase.job.id}
-                    src={phase.job.outputUrl ?? undefined}
-                    poster={phase.job.thumbnailUrl ?? undefined}
-                    controls
-                    autoPlay
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="w-full"
-                  />
-                </div>
-                {phase.job.outputUrl && (
+            <div className="space-y-4">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-black">
+                <video
+                  key={phase.job.outputUrl ?? phase.job.id}
+                  src={phase.job.outputUrl ?? undefined}
+                  poster={phase.job.thumbnailUrl ?? undefined}
+                  controls
+                  autoPlay
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="w-full"
+                />
+              </div>
+              <p className="text-sm text-aura-mute">
+                Rendered with <span className="text-aura-ink">{modelLabel(phase.job.model)}</span>.
+              </p>
+              {phase.job.outputUrl && (
+                <div className="flex gap-3">
+                  <Button
+                    as="a"
+                    href={phase.job.outputUrl}
+                    download
+                    variant="primary"
+                    className="flex-1 justify-center text-sm"
+                  >
+                    Download
+                  </Button>
                   <Button
                     as="a"
                     href={phase.job.outputUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     variant="outline"
-                    className="w-full justify-center text-sm"
+                    className="flex-1 justify-center text-sm"
                   >
                     Open in new tab
                   </Button>
-                )}
-              </div>
-            </Card>
+                </div>
+              )}
+            </div>
           ) : isBusy ? (
-            <Card
-              title="Your video"
-              description="Rendering — this slot fills the moment it's ready."
-              accent="blue"
-            >
-              <VideoSkeleton
-                label={
-                  phase.kind === 'submitting'
-                    ? 'Uploading your request…'
-                    : phase.status === 'QUEUED'
-                      ? 'Queued — your render is lined up…'
-                      : 'Rendering your video…'
-                }
-              />
-            </Card>
+            <div className="space-y-4">
+              <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-aura-iris/25 via-aura-flare/10 to-transparent" />
+                <div className="shimmer-sweep absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span
+                    aria-hidden
+                    className="flex h-12 w-12 animate-pulse items-center justify-center rounded-full border border-white/15 bg-white/5 text-aura-ink/80 backdrop-blur"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+              <p aria-live="polite" className="text-sm text-aura-mute">
+                {phase.kind === 'submitting'
+                  ? 'Sending your request…'
+                  : phase.status === 'QUEUED'
+                    ? 'Queued — your render is lined up.'
+                    : 'Rendering your clip — premium models take a minute or two.'}
+              </p>
+            </div>
           ) : (
-            <Card
-              title="What happens next?"
-              description="Your request runs through the async render pipeline."
-              accent="purple"
-            >
-              <ol className="space-y-2 text-sm text-slate-300">
-                <li>1) Validate payload &amp; file type</li>
-                <li>2) Upload your reference frame</li>
-                <li>3) Queue the job &amp; start generation</li>
-                <li>4) Poll until your video is ready</li>
-              </ol>
-            </Card>
+            <div className="space-y-4">
+              <div className="grid aspect-video w-full place-items-center rounded-2xl border border-dashed border-white/15 bg-black/30">
+                <div className="space-y-2 text-center">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="mx-auto h-8 w-8 fill-none stroke-aura-mute/60"
+                    strokeWidth="1.5"
+                    aria-hidden
+                  >
+                    <rect x="2" y="5" width="20" height="14" rx="2" />
+                    <path d="M2 9h20M6 5v14M18 5v14" />
+                  </svg>
+                  <p className="text-sm text-aura-mute">Your clip premieres here.</p>
+                </div>
+              </div>
+              <p className="text-sm text-aura-mute/80">
+                Each clip costs 1 credit, charged only when the render succeeds.
+              </p>
+            </div>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-function StatusBanner({
-  tone,
-  children,
-}: {
-  tone: 'success' | 'error' | 'info';
-  children: React.ReactNode;
-}) {
-  const toneClasses =
-    tone === 'success'
-      ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
-      : tone === 'error'
-        ? 'border-red-500/50 bg-red-500/10 text-red-200'
-        : 'border-neon-blue/40 bg-neon-blue/10 text-neon-blue';
-  return (
-    <div className={`rounded-xl border px-4 py-3 text-sm ${toneClasses}`}>
-      {children}
-    </div>
-  );
-}
-
-function VideoSkeleton({ label }: { label: string }) {
-  return (
-    <div className="space-y-3">
-      {/* Aspect-video shimmer block standing in for the player. */}
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-white/5">
-        {/* Soft aurora base glow. */}
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-aura-iris/25 via-aura-flare/10 to-transparent" />
-        {/* Sweeping shimmer highlight. */}
-        <div className="absolute inset-y-0 -left-full w-1/2 animate-video-shimmer bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-        {/* Center pulsing play glyph. */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span
-            aria-hidden
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-aura-ink/80 backdrop-blur animate-pulse"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden>
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </span>
-        </div>
-      </div>
-
-      {/* Status line. */}
-      <div className="flex items-center gap-3 text-sm text-aura-mute">
-        <Spinner />
-        <span aria-live="polite">{label}</span>
-      </div>
-
-      {/* Faux metadata lines to complete the skeleton. */}
-      <div className="space-y-2" aria-hidden>
-        <div className="h-3 w-2/3 animate-pulse rounded-full bg-white/5" />
-        <div className="h-3 w-1/3 animate-pulse rounded-full bg-white/5" />
-      </div>
-
-      <style jsx>{`
-        @keyframes video-shimmer {
-          100% {
-            transform: translateX(400%);
-          }
-        }
-        :global(.animate-video-shimmer) {
-          animation: video-shimmer 1.6s ease-in-out infinite;
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <span
-      aria-hidden
-      className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-neon-blue/30 border-t-neon-blue"
-    />
-  );
-}
-
-function ChecklistItem({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <li className="flex items-center gap-2">
-      <span
-        aria-hidden
-        className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
-          ok
-            ? 'bg-emerald-500/20 text-emerald-300'
-            : 'bg-white/5 text-slate-500'
-        }`}
-      >
-        {ok ? '✓' : '•'}
-      </span>
-      <span className="text-slate-200">{label}</span>
-    </li>
   );
 }

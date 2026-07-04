@@ -24,7 +24,7 @@ export interface GenerateInput {
 async function postCallback(
   body: { jobId: string; outputUrl?: string; error?: string },
 ): Promise<void> {
-  const base = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+  const base = getBaseUrl();
   await fetch(`${base}/api/video/callback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -32,6 +32,19 @@ async function postCallback(
   }).catch((err: unknown) => {
     console.error('[postCallback] failed:', err);
   });
+}
+
+function getBaseUrl(): string {
+  return (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+}
+
+/**
+ * True when our base URL is reachable from the public internet — the
+ * precondition for fal webhooks. localhost (dev) can only poll.
+ */
+function isPubliclyReachable(): boolean {
+  const base = getBaseUrl();
+  return !/localhost|127\.0\.0\.1|\[::1\]/.test(base);
 }
 
 export interface VideoProvider {
@@ -53,7 +66,17 @@ export class StubProvider implements VideoProvider {
   readonly name = 'stub';
 
   async start(input: GenerateInput): Promise<void> {
-    // Fire-and-forget after a short delay so /api/video/create returns fast.
+    // Serverless (Vercel) freezes after the response, so timers never fire —
+    // complete the job inline instead.
+    if (process.env.VERCEL) {
+      await postCallback({
+        jobId: input.jobId,
+        outputUrl: process.env.SAMPLE_VIDEO_URL,
+      });
+      return;
+    }
+
+    // Dev: fire-and-forget after a short delay to mimic a real async render.
     setTimeout(() => {
       void postCallback({
         jobId: input.jobId,
@@ -136,7 +159,19 @@ export class FalProvider implements VideoProvider {
       body.image_url = `data:${input.imageContentType};base64,${input.imageBuffer!.toString('base64')}`;
     }
 
-    const submitRes = await fetch(`https://queue.fal.run/${model}`, {
+    // Public deployments get push results via fal webhook (required on Vercel,
+    // where post-response timers freeze). Local dev falls back to polling.
+    const useWebhook = isPubliclyReachable();
+    let submitUrl = `https://queue.fal.run/${model}`;
+    if (useWebhook) {
+      const { signJobId } = await import('@/lib/video-finalize');
+      const webhookUrl = `${getBaseUrl()}/api/video/fal-webhook?jobId=${encodeURIComponent(
+        input.jobId,
+      )}&sig=${signJobId(input.jobId)}`;
+      submitUrl += `?fal_webhook=${encodeURIComponent(webhookUrl)}`;
+    }
+
+    const submitRes = await fetch(submitUrl, {
       method: 'POST',
       headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -148,8 +183,10 @@ export class FalProvider implements VideoProvider {
     }
 
     const submit = (await submitRes.json()) as FalSubmitResponse;
-    // Background poll → forward to our callback. Non-blocking.
-    void this.poll(input.jobId, submit, key, 0);
+    if (!useWebhook) {
+      // Background poll → forward to our callback. Non-blocking.
+      void this.poll(input.jobId, submit, key, 0);
+    }
   }
 
   private async poll(

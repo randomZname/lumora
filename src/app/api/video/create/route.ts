@@ -9,6 +9,7 @@ import {
   resolveModelByChoice,
   type ModelChoice,
 } from "@/lib/video-provider";
+import { rateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
       );
     }
     const userId = session.user.id;
+
+    const rl = rateLimit(`video-create:${userId}`, 12, 5 * 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { success: false, message: "Too many requests — give it a minute." },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+      );
+    }
 
     const formData = await request.formData();
     const text = (formData.get("text") as string | null)?.trim() ?? "";
@@ -88,10 +97,12 @@ export async function POST(request: Request) {
     const model =
       provider.name === "fal" ? resolveModelByChoice(modelChoice, !!buffer) : null;
 
+    // PROCESSING is set before start(): providers may complete the job inline
+    // (stub on serverless), and a later status write would clobber DONE.
     const job = await prisma.videoJob.create({
       data: {
         userId,
-        status: "QUEUED",
+        status: "PROCESSING",
         provider: provider.name,
         model,
         inputText: text,
@@ -101,21 +112,28 @@ export async function POST(request: Request) {
       },
     });
 
-    await provider.start({
-      jobId: job.id,
-      inputImageUrl,
-      text,
-      duration,
-      ...(model ? { model } : {}),
-      ...(buffer && imageType
-        ? { imageBuffer: buffer, imageContentType: imageType }
-        : {}),
-    });
-
-    await prisma.videoJob.update({
-      where: { id: job.id },
-      data: { status: "PROCESSING" },
-    });
+    try {
+      await provider.start({
+        jobId: job.id,
+        inputImageUrl,
+        text,
+        duration,
+        ...(model ? { model } : {}),
+        ...(buffer && imageType
+          ? { imageBuffer: buffer, imageContentType: imageType }
+          : {}),
+      });
+    } catch (startErr) {
+      console.error("Video provider start failed", startErr);
+      await prisma.videoJob.updateMany({
+        where: { id: job.id, status: "PROCESSING" },
+        data: { status: "FAILED", error: "Generation could not be started." },
+      });
+      return NextResponse.json(
+        { success: false, message: "Generation could not be started. Please try again." },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({ jobId: job.id });
   } catch (error) {

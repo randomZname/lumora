@@ -2,6 +2,40 @@
 
 Newest first. Format: `## YYYY-MM-DD` then `- what — why`.
 
+## 2026-07-04 (auth + payments + prod video fix + security + redesign)
+- **Email+password auth** (primary sign-in): `/api/auth/register` (zod + bcryptjs cost 12,
+  20 starter credits), `credentials` provider in `lib/auth.ts`, login page rewritten with
+  Sign in / Create account tabs. Dev Login now hard-disabled in production builds
+  (`NODE_ENV !== 'production'` gate) — prod uses real accounts.
+- **Payments (Phase 4, mock provider — Stripe-ready)**: `Payment` model + `PaymentStatus`/
+  `PurchaseKind` enums (migration `add_password_and_payments`); catalog in `lib/products.ts`
+  (Pro $19/400cr, Premium $49/1200cr + credit packs 100/$5, 400/$18, 1200/$45);
+  `lib/payments.ts` provider abstraction + idempotent `fulfillPayment` (PENDING→COMPLETED
+  transition and grant in one transaction — webhook replays are no-ops); `/api/checkout`,
+  internal test checkout page `/checkout/[id]` (card 4242…), `/api/checkout/[id]/confirm`;
+  `/api/payments/webhook` placeholder returns 501 until Stripe keys exist. Plans page wired
+  to real checkout + credit-packs section; account page shows billing history + clip gallery.
+  Old fake PaymentModal deleted.
+- **Prod video generation fixed (was dead on Vercel)**: fal jobs now submit with
+  `fal_webhook` → new `/api/video/fal-webhook?jobId&sig` route (HMAC-SHA256 keyed by
+  N8N_CALLBACK_SECRET, timing-safe). Shared finalize logic extracted to
+  `lib/video-finalize.ts` (callback + webhook use it). Stub provider completes inline on
+  Vercel (timers freeze after response). Self-host transcode skipped on Vercel with local
+  storage driver (read-only FS) — raw provider URL used instead. `create` route: PROCESSING
+  set before `start()` (inline completion could be clobbered), FAILED on start throw.
+- **Security**: in-memory rate limiting (`lib/rate-limit.ts`) on register/login/checkout/
+  confirm/video-create; security headers + CSP in next.config; zod validation on new routes;
+  timing-safe secret comparison in callback; account-scoped ownership checks on payments.
+- **Redesign (aurora, serious upgrade)**: full-bleed cinema-frame hero (real Kling render +
+  animated gradient headline + "the prompt" caption bar with blinking caret); studio page
+  rebuilt (prompt console + sticky Screening room with elapsed timer, adaptive 2.5s→5s
+  polling, unified aura palette — slate/neon classes gone, dev-scaffolding cards removed);
+  AuthWidget links to account. DemoVideoPanel + `/api/demo-video` deleted (orphaned).
+- Validated locally end-to-end: register → login (wrong password rejected, no session) →
+  checkout Pro → fulfill (plan PRO, 420 credits, replay idempotent) → stub video DONE →
+  1 credit spent; all pages 200; register rate limit fires 429 on 11th attempt; `tsc` +
+  `next build` clean.
+
 ## 2026-06-12 (production database + working login on the live demo)
 - Provisioned Neon Postgres through the Vercel Marketplace integration and connected it
   to the `lumora` project; ran both Prisma migrations against it. Enabled Dev Login on

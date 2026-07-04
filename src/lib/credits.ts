@@ -8,6 +8,9 @@ import { prisma } from '@/lib/prisma';
 
 export const COST_PER_VIDEO = 1; // credits; tune later
 
+/** Credits granted to every new account on sign-up (FREE allowance). */
+export const STARTER_CREDITS = 20;
+
 /** True if the user currently has at least `cost` credits. */
 export async function hasCredits(userId: string, cost: number): Promise<boolean> {
   const user = await prisma.user.findUnique({

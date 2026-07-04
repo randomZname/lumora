@@ -27,18 +27,50 @@ enum TxType {
   REFUND
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum PurchaseKind {
+  PLAN
+  CREDITS
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  image     String?
-  plan      Plan     @default(FREE)
-  credits   Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  image        String?
+  passwordHash String?
+  plan         Plan     @default(FREE)
+  credits      Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   videoJobs          VideoJob[]
   creditTransactions CreditTransaction[]
+  payments           Payment[]
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  provider    String // "mock" | "stripe"
+  status      PaymentStatus @default(PENDING)
+  kind        PurchaseKind
+  plan        Plan? // set when kind = PLAN
+  credits     Int? // set when kind = CREDITS
+  amountCents Int
+  currency    String        @default("USD")
+  externalRef String?       @unique // provider-side session/payment id
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId, createdAt])
 }
 
 model VideoJob {

@@ -33,71 +33,72 @@ const showcase = [
   { title: 'Dune Drift', tag: 'aerial · golden hour', video: '/samples/dune-drift.mp4' },
 ];
 
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div>
-      <div className="font-display text-2xl font-semibold text-aura-ink">{value}</div>
-      <div className="text-xs uppercase tracking-[0.18em] text-aura-mute">{label}</div>
-    </div>
-  );
-}
+const HERO_PROMPT =
+  'A neon-lit alley after rain, puddles mirroring magenta signs, slow dolly forward, cinematic mood.';
 
 export default function Home() {
   return (
     <div className="space-y-24 pb-8">
-      {/* HERO */}
-      <section className="rise grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-7">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em] text-aura-mute">
-            <span className="h-1.5 w-1.5 rounded-full bg-aura-mint" />
-            AI motion studio
-          </p>
-          <h1 className="font-display text-5xl font-semibold leading-[1.05] tracking-tight text-aura-ink sm:text-6xl">
-            Turn a thought into{' '}
-            <span className="gradient-text glow-text">living motion</span>
-          </h1>
-          <p className="max-w-xl text-lg leading-relaxed text-aura-mute">
-            {BRAND.description} No timeline, no rig, no crew — just your idea and a
-            few seconds.
-          </p>
-          <div className="flex flex-wrap items-center gap-4">
-            <Button as="a" href="/create-video" variant="primary" className="text-base">
-              {BRAND.cta}
-            </Button>
-            <Link
-              href="/plans"
-              className="text-sm font-semibold text-aura-mute underline decoration-dotted underline-offset-8 transition hover:text-aura-ink"
-            >
-              See pricing →
-            </Link>
-          </div>
-          <div className="flex gap-10 pt-4">
-            <Stat value="~30s" label="to first clip" />
-            <Stat value="5–10s" label="clip length" />
-            <Stat value="∞" label="re-rolls" />
+      {/* HERO — one full-bleed cinema frame: a real render with the title set on it. */}
+      <section className="rise">
+        <div className="relative overflow-hidden rounded-4xl border border-white/10 shadow-[0_30px_120px_rgba(0,0,0,0.55)]">
+          <video
+            src="/samples/cyber-alley.mp4"
+            poster="/samples/cyber-alley.jpg"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Legibility veils — footage stays visible top-right. */}
+          <div className="absolute inset-0 bg-gradient-to-t from-aura-void via-aura-void/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-aura-void/75 via-aura-void/20 to-transparent" />
+
+          <div className="relative z-10 flex min-h-[58vh] flex-col justify-end gap-6 p-7 sm:min-h-[64vh] sm:p-12">
+            <p className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-aura-void/50 px-3 py-1 text-xs uppercase tracking-[0.22em] text-aura-mute backdrop-blur">
+              <span className="h-1.5 w-1.5 rounded-full bg-aura-mint" />
+              AI motion studio
+            </p>
+            <h1 className="max-w-3xl font-display text-5xl font-semibold leading-[1.02] tracking-tight text-aura-ink sm:text-7xl">
+              Turn a thought into <span className="gradient-text-animated">living motion</span>
+            </h1>
+            <p className="max-w-xl text-lg leading-relaxed text-aura-ink/80">
+              {BRAND.description} No timeline, no rig, no crew — just your idea and a few
+              seconds.
+            </p>
+            <div className="flex flex-wrap items-center gap-4 pb-2">
+              <Button as="a" href="/create-video" variant="primary" className="text-base">
+                {BRAND.cta}
+              </Button>
+              <Link
+                href="/plans"
+                className="text-sm font-semibold text-aura-ink/70 underline decoration-dotted underline-offset-8 transition hover:text-aura-ink"
+              >
+                See pricing →
+              </Link>
+            </div>
           </div>
         </div>
 
-        {/* Hero video frame */}
-        <div className="relative">
-          <div className="glass neon-border relative aspect-[4/3] w-full overflow-hidden rounded-4xl">
-            <video
-              src="/samples/cyber-alley.mp4"
-              poster="/samples/cyber-alley.jpg"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-aura-void/80 via-transparent to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between p-4 text-xs text-aura-ink">
-              <span className="font-semibold">Real {BRAND.name} output</span>
-              <span className="rounded-full bg-white/10 px-3 py-1 backdrop-blur">live render</span>
-            </div>
+        {/* The exact prompt behind the shot above — words become film. */}
+        <div className="relative z-10 mx-auto -mt-6 max-w-3xl px-3">
+          <div className="glass flex flex-col gap-1 rounded-2xl px-5 py-3.5 sm:flex-row sm:items-center sm:gap-4">
+            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-aura-gold">
+              The prompt
+            </span>
+            <p className="caret truncate font-mono text-sm text-aura-ink/90" title={HERO_PROMPT}>
+              {HERO_PROMPT}
+            </p>
           </div>
-          <div className="pointer-events-none absolute -inset-4 -z-10 rounded-[2.5rem] bg-gradient-to-br from-aura-iris/20 via-aura-flare/10 to-aura-gold/10 blur-2xl" />
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-xs text-aura-mute">
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">~30s to first clip</span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">5–10s cinematic clips</span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Re-roll anytime</span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">Kling & LTX models</span>
         </div>
       </section>
 

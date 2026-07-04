@@ -16,14 +16,22 @@ Known bugs / tech debt. `[ ]` open, `[x]` fixed (note date). Severity: 🔴 high
       in Phase 5.
 - [x] 2026-06-08 Generated videos played slowly from fal.media (remote, no faststart) — now
       transcoded to faststart + self-hosted via `/api/media` with Range support → instant playback.
-- [ ] 🟢 No rate limiting on any route. Phase 5.
+- [x] 2026-07-04 🟢 No rate limiting on any route — added `lib/rate-limit.ts` (in-memory,
+      fixed-window) on register/login/checkout/confirm/video-create. Caveat: per-instance
+      on serverless; swap to Upstash/Redis when traffic justifies.
 - [ ] 🟢 No tests, no real CI checks.
+- [ ] 🟡 Payments run on the internal mock provider (test card 4242…). Real money needs
+      Stripe keys + StripeProvider + webhook signature verification (interface ready,
+      fulfillment idempotent).
+- [ ] 🔴 FAL_KEY lost locally AND missing on Vercel; N8N_CALLBACK_SECRET also missing on
+      Vercel → real fal generation blocked everywhere until re-issued (see TASKS).
 - [x] 2026-06-12 🟡 Vercel prod had no database — provisioned Neon via Vercel Marketplace
       (`neon-coral-zebra`), ran `prisma migrate deploy`, enabled dev login. Live login
       verified end-to-end (csrf → credentials callback → session with FREE plan).
-- [ ] 🟡 Stub/Fal providers do post-response work via `setTimeout` — Vercel serverless
-      freezes after the response, so the callback/poll never fires in prod. Fix: fal
-      webhooks (queue API supports `fal_webhook` param) pointing at /api/video/callback.
+- [x] 2026-07-04 🟡 Stub/Fal providers did post-response work via `setTimeout` — Vercel
+      serverless froze it, prod generation was dead. Fixed: fal submits with `fal_webhook`
+      → `/api/video/fal-webhook` (HMAC-signed URL); stub completes inline on Vercel;
+      local dev keeps in-process polling.
 
 ## Fixed
 - [x] 2026-06-11 🟢 `src/TestComponent.tsx` leftover scaffolding — confirmed unused, removed.
